@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boma Lathu — My Issues</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { DEFAULT: '#0E1B2E', 50: '#E8F0F8', 500: '#1C3A5E', 700: '#102136', 800: '#0E1B2E' },
+          gold: { DEFAULT: '#D4A843' },
+          sage: '#1A6B45',
+          crimson: '#C44444',
+        },
+        fontFamily: {
+          sans: ['DM Sans', 'sans-serif'],
+          display: ['Playfair Display', 'serif'],
+        }
+      }
+    }
+  }
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'DM Sans', sans-serif; background: #F5F3EE; }
+  .sidebar { width: 220px; min-height: 100vh; background: #0E1B2E; position: fixed; top: 0; left: 0; z-index: 40; display: flex; flex-direction: column; }
+  .main-content { margin-left: 220px; min-height: 100vh; background: #F5F3EE; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 18px; font-size: 13px; color: rgba(255,255,255,0.5); cursor: pointer; transition: all .15s; border-left: 2px solid transparent; text-decoration: none; }
+  .nav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.05); }
+  .nav-item.active { color: #fff; border-left-color: #D4A843; background: rgba(212,168,67,0.1); }
+  .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .badge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .04em; }
+  .pill-pending   { background: #FFF0D0; color: #8A5A00; }
+  .pill-progress  { background: #DDEEF8; color: #0A4A75; }
+  .pill-resolved  { background: #D5F0E0; color: #0A5A2A; }
+  .pill-escalated { background: #EDE0F8; color: #4A1A7A; }
+  .pill-overdue   { background: #FFEAEA; color: #A32D2D; }
+  .cat-water      { background: #DDEEF8; color: #0A4A75; }
+  .cat-roads      { background: #FDE8D0; color: #7A3A0A; }
+  .cat-health     { background: #D8F0E3; color: #0A5A2A; }
+  .cat-education  { background: #EDE0F8; color: #4A1A7A; }
+  .cat-security   { background: #FFEAEA; color: #8A1A1A; }
+  .trow { border-bottom: 0.5px solid #F0EDE5; transition: background .1s; }
+  .trow:hover { background: #FAFAF7; }
+  .progress-bar  { height: 4px; border-radius: 2px; background: #EEE; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; }
+  .notif-dot { width: 7px; height: 7px; border-radius: 50%; background: #D4A843; display: inline-block; }
+  .toggle-wrap { display: flex; background: #E5E7EB; border-radius: 8px; padding: 2px; gap: 2px; }
+  .toggle-btn { padding: 6px 16px; font-size: 11px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all .15s; color: #6B7280; white-space: nowrap; }
+  .toggle-btn.active { background: #fff; color: #0E1B2E; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .card-header { padding: 11px 16px; border-bottom: 0.5px solid #EEE; display: flex; justify-content: space-between; align-items: center; }
+  .card-header-title { font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .07em; }
+  ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #CCC; border-radius: 4px; }
+
+  /* Expand detail row */
+  .expand-row { display: none; background: #FAFAF7; }
+  .expand-row.open { display: table-row; }
+
+  /* Respond panel row — slides in below the issue row */
+  .respond-row { display: none; }
+  .respond-row.open { display: table-row; }
+  .respond-panel {
+    background: #F0F7F4;
+    border-top: 2px solid #1A6B45;
+    border-bottom: 2px solid #1A6B45;
+    animation: slideDown .25s ease;
+  }
+  @keyframes slideDown { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: translateY(0); } }
+
+  /* Respond panel internals */
+  textarea:focus, input:focus, select:focus { outline: none; border-color: #0E1B2E !important; box-shadow: none; }
+  .char-count { transition: color .2s; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1A6B45; color: #fff; font-size: 12px; font-weight: 500; padding: 10px 18px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.2); transform: translateY(60px); opacity: 0; transition: all .3s; z-index: 100; pointer-events:none; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* Active respond row highlight */
+  .trow.responding { background: #F0F7F4 !important; }
+  .trow.responding td { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✓ Response submitted successfully</div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="px-5 py-5 border-b border-white/10">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-gold flex items-center justify-center text-base font-bold text-navy">BL</div>
+      <div>
+        <div class="text-white font-semibold text-base leading-none">Boma <span class="text-gold">Lathu</span></div>
+        <div class="text-white/30 text-base mt-0.5">MP Portal</div>
+      </div>
+    </div>
+  </div>
+  <div class="px-5 py-4 border-b border-white/10">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-base font-bold text-gold" style="background:#1C3A5E">JM</div>
+      <div>
+        <div class="text-white text-base font-semibold leading-tight">Hon. J. Mwale</div>
+        <div class="text-white/40 text-base">Chileka North</div>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="notif-dot"></span>
+          <span class="text-gold text-base font-medium" id="pendingCount">3 pending actions</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="flex-1 py-3 overflow-y-auto">
+    <div class="px-4 py-2 text-base font-semibold text-white/25 uppercase tracking-widest">Main</div>
+    <a href="overview.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Overview
+    </a>
+    <a href="issues.html" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      My Issues
+      <span class="ml-auto bg-gold/20 text-gold text-base font-bold px-1.5 py-0.5 rounded-full">12</span>
+    </a>
+    <a href="performance.html" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Performance
+    </a>
+  </nav>
+  <div class="px-5 py-4 border-t border-white/10">
+    <div class="text-base text-white/25 mb-2">Accountability score</div>
+    <div class="flex items-center gap-2">
+      <div class="flex-1 progress-bar"><div class="progress-fill bg-gold" style="width:74%"></div></div>
+      <span class="text-gold text-base font-bold">74</span>
+    </div>
+    <div class="text-base text-white/30 mt-1">Rank #3 of 193 MPs</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main-content">
+  <header class="bg-white border-b border-gray-100 px-8 py-3 flex items-center justify-between sticky top-0 z-30">
+    <div>
+      <h1 class="font-display text-navy text-lg font-bold leading-none">My Issues</h1>
+      <p class="text-gray-400 text-base mt-0.5">Chileka North Constituency · March 2026</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-base text-gray-400">
+        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search issues…
+      </div>
+      <div class="relative">
+        <div class="w-8 h-8 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center">
+          <svg class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-gold rounded-full border-2 border-white text-base flex items-center justify-center text-navy font-bold" id="bellCount">3</span>
+      </div>
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold text-gold" style="background:#0E1B2E">JM</div>
+    </div>
+  </header>
+
+  <div class="p-8">
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-5 gap-3 mb-6">
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center">
+        <div class="text-xl font-bold text-navy font-display">12</div>
+        <div class="text-base text-gray-400 mt-0.5">Total</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center">
+        <div class="text-xl font-bold font-display" style="color:#8A5A00">3</div>
+        <div class="text-base text-gray-400 mt-0.5">Pending</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center">
+        <div class="text-xl font-bold font-display" style="color:#0A4A75">5</div>
+        <div class="text-base text-gray-400 mt-0.5">In Progress</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center">
+        <div class="text-xl font-bold font-display" style="color:#1A6B45">4</div>
+        <div class="text-base text-gray-400 mt-0.5">Resolved</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 text-center">
+        <div class="text-xl font-bold text-crimson font-display">1</div>
+        <div class="text-base text-gray-400 mt-0.5">Overdue</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="toggle-wrap">
+        <div class="toggle-btn active" onclick="filterStatus('all')">All (12)</div>
+        <div class="toggle-btn" onclick="filterStatus('pending')">Pending (3)</div>
+        <div class="toggle-btn" onclick="filterStatus('progress')">In Progress (5)</div>
+        <div class="toggle-btn" onclick="filterStatus('resolved')">Resolved (4)</div>
+      </div>
+      <div class="flex gap-2">
+        <select id="catFilter" onchange="applyFilters()" class="text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-500 bg-white focus:outline-none">
+          <option value="">All categories</option>
+          <option value="water">Water</option>
+          <option value="roads">Roads</option>
+          <option value="health">Health</option>
+          <option value="education">Education</option>
+          <option value="security">Security</option>
+        </select>
+        <select id="sortSelect" class="text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-500 bg-white focus:outline-none">
+          <option>Sort: Newest</option>
+          <option>Sort: Most votes</option>
+          <option>Sort: Priority</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <table class="w-full" id="issuesTable">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-100">
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Issue</th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Category</th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Status</th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Citizens</th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Reported</th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 w-8"></th>
+            <th class="text-left text-base font-semibold text-gray-400 uppercase tracking-wider px-4 py-3">Action</th>
+          </tr>
+        </thead>
+        <tbody id="issuesTbody">
+
+          <!-- ── ROW 1 — In Progress / Water ── -->
+          <tr class="trow issue-row" id="row-r1" data-status="progress" data-cat="water" onclick="toggleExpand('r1')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">No clean water at Chileka market</div>
+              <div class="text-base text-gray-400">#MW-2026-0392</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-water">Water</span></td>
+            <td class="px-4 py-3"><span class="badge pill-progress" id="status-r1">In Progress</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-navy">23</span></td>
+            <td class="px-4 py-3"><span class="text-base text-gray-400">14 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r1">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r1')" id="btn-r1" class="text-base bg-navy text-white px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity">Update</button>
+            </td>
+          </tr>
+          <!-- Detail expand -->
+          <tr class="expand-row" id="expand-r1">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Citizen report:</span> "The borehole at Chileka main market has been dry for 14 days. Vendors and customers have no clean water access."</div>
+              <div class="flex gap-3 flex-wrap">
+                <span class="text-base text-gray-400">📍 Chileka Main Market, Ward 4</span>
+                <span class="text-base text-gray-400">▲ 23 votes</span>
+                <span class="text-base text-gray-400">Last update: 3 days ago</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Respond panel -->
+          <tr class="respond-row" id="respond-r1">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-sage"></div>
+                    <span class="text-base font-bold text-navy">Responding to: No clean water at Chileka market</span>
+                    <span class="badge cat-water ml-1">Water</span>
+                    <span class="text-base text-gray-400">#MW-2026-0392 · 23 citizens</span>
+                  </div>
+                  <button onclick="closeRespond('r1')" class="text-gray-400 hover:text-gray-600 text-base font-medium flex items-center gap-1">✕ Close</button>
+                </div>
+                <!-- Citizen report quote -->
+                <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Citizen's Report</div>
+                  <p class="text-base text-gray-600 leading-relaxed italic">"The borehole at Chileka main market has been dry for 14 days. Vendors and customers have no clean water access. This is a public health emergency."</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base text-gray-400">📍 Chileka Main Market, Ward 4</span>
+                    <span class="text-base text-navy font-medium">▲ 23 votes</span>
+                    <span class="text-base text-gray-400">14 days without resolution</span>
+                  </div>
+                </div>
+                <!-- Response form -->
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Your Public Response</label>
+                    <textarea id="ta-r1" class="w-full border border-gray-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="Write a response that will be publicly visible to all 23 citizens who reported this issue…" oninput="countChars('ta-r1','cc-r1')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-gray-300">Visible to citizens on the Boma Lathu app</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r1">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update Status</label>
+                      <select id="sel-r1" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" class="rounded accent-sage" checked> Notify 23 citizens via SMS
+                      </label>
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" id="esc-r1" class="rounded accent-sage" onchange="toggleEsc('en-r1',this)"> Escalate to Ministry
+                      </label>
+                    </div>
+                    <button onclick="submitResponse('r1')" class="mt-auto text-base bg-sage text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Submit Response
+                    </button>
+                  </div>
+                </div>
+                <div id="en-r1" class="hidden mt-3 p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                  <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1">Escalate To</label>
+                  <select class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none bg-white">
+                    <option>Malawi Water Board</option>
+                    <option>Blantyre District Council</option>
+                    <option>Ministry of Water</option>
+                  </select>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ── ROW 2 — Escalated / Health ── -->
+          <tr class="trow issue-row" id="row-r2" data-status="escalated" data-cat="health" onclick="toggleExpand('r2')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">Maternity clinic medicine shortage</div>
+              <div class="text-base text-gray-400">#MW-2026-0441</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-health">Health</span></td>
+            <td class="px-4 py-3"><span class="badge pill-escalated" id="status-r2">Escalated</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-navy">8</span></td>
+            <td class="px-4 py-3"><span class="text-base text-gray-400">22 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r2">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r2')" id="btn-r2" class="text-base px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity" style="background:#EDE0F8;color:#4A1A7A">Track</button>
+            </td>
+          </tr>
+          <tr class="expand-row" id="expand-r2">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Escalation note:</span> Escalated to Ministry of Health on 23 March 2026. Awaiting procurement officer assignment. Ref #MW-2026-0441.</div>
+              <div class="flex gap-3 flex-wrap">
+                <span class="text-base text-gray-400">Escalated to: Ministry of Health</span>
+                <span class="text-base text-gray-400">Expected response: 7 working days</span>
+              </div>
+            </td>
+          </tr>
+          <tr class="respond-row" id="respond-r2">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-sage"></div>
+                    <span class="text-base font-bold text-navy">Responding to: Maternity clinic medicine shortage</span>
+                    <span class="badge cat-health ml-1">Health</span>
+                    <span class="text-base text-gray-400">#MW-2026-0441 · 8 citizens</span>
+                  </div>
+                  <button onclick="closeRespond('r2')" class="text-gray-400 hover:text-gray-600 text-base font-medium">✕ Close</button>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Citizen's Report</div>
+                  <p class="text-base text-gray-600 leading-relaxed italic">"Chileka maternity clinic has run out of oxytocin and other essential medicines. Mothers are being turned away. This is life-threatening."</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base text-gray-400">📍 Chileka Maternity Clinic</span>
+                    <span class="text-base text-navy font-medium">▲ 8 votes</span>
+                    <span class="text-base text-purple-600 font-medium">Escalated to Ministry of Health</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update / Progress Note</label>
+                    <textarea id="ta-r2" class="w-full border border-gray-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="Post a progress update on this escalated issue…" oninput="countChars('ta-r2','cc-r2')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-gray-300">Visible to citizens on the Boma Lathu app</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r2">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update Status</label>
+                      <select id="sel-r2" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="escalated" selected>Escalated</option>
+                        <option value="progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                      </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                      <input type="checkbox" class="rounded accent-sage" checked> Notify 8 citizens via SMS
+                    </label>
+                    <button onclick="submitResponse('r2')" class="mt-auto text-base bg-sage text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Submit Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ── ROW 3 — Pending / Education ── -->
+          <tr class="trow issue-row" id="row-r3" data-status="pending" data-cat="education" onclick="toggleExpand('r3')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">Primary school classroom roof collapsed</div>
+              <div class="text-base text-gray-400">#MW-2026-0518</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-education">Education</span></td>
+            <td class="px-4 py-3"><span class="badge pill-pending" id="status-r3">Pending</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-navy">15</span></td>
+            <td class="px-4 py-3"><span class="text-base text-gray-400">6 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r3">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r3')" id="btn-r3" class="text-base bg-navy text-white px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity">Respond</button>
+            </td>
+          </tr>
+          <tr class="expand-row" id="expand-r3">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Citizen report:</span> "The roof of Block B at Chileka Primary collapsed after heavy rains. 3 classes (Std 4, 5, 6) are learning outside."</div>
+              <div class="flex gap-3 flex-wrap">
+                <span class="text-base text-orange-500 font-medium">⚑ No response yet — 6 days</span>
+                <span class="text-base text-gray-400">▲ 15 votes</span>
+              </div>
+            </td>
+          </tr>
+          <tr class="respond-row" id="respond-r3">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-sage"></div>
+                    <span class="text-base font-bold text-navy">Responding to: Primary school classroom roof collapsed</span>
+                    <span class="badge cat-education ml-1">Education</span>
+                    <span class="text-base text-orange-500 font-medium">⚑ 6 days no response</span>
+                  </div>
+                  <button onclick="closeRespond('r3')" class="text-gray-400 hover:text-gray-600 text-base font-medium">✕ Close</button>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Citizen's Report</div>
+                  <p class="text-base text-gray-600 leading-relaxed italic">"The roof of Block B at Chileka Primary collapsed after heavy rains. 3 classes (Std 4, 5, 6) are learning outside. This is affecting 120 pupils."</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base text-gray-400">📍 Chileka Primary School, Block B</span>
+                    <span class="text-base text-navy font-medium">▲ 15 votes</span>
+                    <span class="text-base text-orange-500">No response in 6 days</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Your Public Response</label>
+                    <textarea id="ta-r3" class="w-full border border-gray-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="Write a public response visible to all 15 affected citizens…" oninput="countChars('ta-r3','cc-r3')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-gray-300">Visible to citizens on the Boma Lathu app</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r3">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update Status</label>
+                      <select id="sel-r3" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" class="rounded accent-sage" checked> Notify 15 citizens via SMS
+                      </label>
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" id="esc-r3" class="rounded accent-sage" onchange="toggleEsc('en-r3',this)"> Escalate to Ministry
+                      </label>
+                    </div>
+                    <button onclick="submitResponse('r3')" class="mt-auto text-base bg-sage text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Submit Response
+                    </button>
+                  </div>
+                </div>
+                <div id="en-r3" class="hidden mt-3 p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                  <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1">Escalate To</label>
+                  <select class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none bg-white">
+                    <option>Ministry of Education</option>
+                    <option>Blantyre District Council</option>
+                    <option>Public Works Department</option>
+                  </select>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ── ROW 4 — Resolved / Roads ── -->
+          <tr class="trow issue-row" id="row-r4" data-status="resolved" data-cat="roads" onclick="toggleExpand('r4')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">Pothole repairs on Chileka–Ndirande road</div>
+              <div class="text-base text-gray-400">#MW-2026-0480</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-roads">Roads</span></td>
+            <td class="px-4 py-3"><span class="badge pill-resolved" id="status-r4">Resolved</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-navy">41</span></td>
+            <td class="px-4 py-3"><span class="text-base text-gray-400">30 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r4">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r4')" id="btn-r4" class="text-base bg-gray-100 text-gray-500 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-200 transition-colors">View</button>
+            </td>
+          </tr>
+          <tr class="expand-row" id="expand-r4">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Resolution note:</span> Repairs completed by Roads Authority on 22 March 2026. 41 citizens notified via SMS.</div>
+              <div class="text-base" style="color:#1A6B45">✓ Resolved 3 days ago</div>
+            </td>
+          </tr>
+          <tr class="respond-row" id="respond-r4">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-sage"></div>
+                    <span class="text-base font-bold text-navy">Update: Pothole repairs on Chileka–Ndirande road</span>
+                    <span class="badge cat-roads ml-1">Roads</span>
+                    <span class="badge pill-resolved ml-1">Resolved</span>
+                  </div>
+                  <button onclick="closeRespond('r4')" class="text-gray-400 hover:text-gray-600 text-base font-medium">✕ Close</button>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Resolution Summary</div>
+                  <p class="text-base text-gray-600 leading-relaxed">Repairs completed by Roads Authority on 22 March 2026. 41 citizens notified via SMS. Road now safe for use.</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base" style="color:#1A6B45">✓ Resolved 3 days ago</span>
+                    <span class="text-base text-navy font-medium">▲ 41 votes</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Add Follow-up Note <span class="font-normal normal-case">(optional)</span></label>
+                    <textarea id="ta-r4" class="w-full border border-gray-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="Add any follow-up notes or comments…" oninput="countChars('ta-r4','cc-r4')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-gray-300">Visible to citizens on the Boma Lathu app</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r4">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Status</label>
+                      <select id="sel-r4" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="resolved" selected>Resolved</option>
+                        <option value="progress">Re-open: In Progress</option>
+                      </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                      <input type="checkbox" class="rounded accent-sage"> Notify 41 citizens via SMS
+                    </label>
+                    <button onclick="submitResponse('r4')" class="mt-auto text-base bg-sage text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Save Note
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ── ROW 5 — Overdue / Water ── -->
+          <tr class="trow issue-row" id="row-r5" data-status="overdue" data-cat="water" onclick="toggleExpand('r5')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">Sewage overflow near Chileka clinic</div>
+              <div class="text-base text-gray-400">#MW-2026-0461</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-water">Water</span></td>
+            <td class="px-4 py-3"><span class="badge pill-overdue" id="status-r5">⚑ Overdue</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-crimson">11</span></td>
+            <td class="px-4 py-3"><span class="text-base text-crimson font-medium">31 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r5">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r5')" id="btn-r5" class="text-base bg-crimson text-white px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity">Act Now</button>
+            </td>
+          </tr>
+          <tr class="expand-row" id="expand-r5">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Citizen report:</span> "Raw sewage has been overflowing onto the path near the clinic for over a month. People are getting sick. This is urgent."</div>
+              <div class="flex gap-3 flex-wrap">
+                <span class="text-base text-crimson font-medium">⚠ Auto-escalation to DC office in 14 days</span>
+                <span class="text-base text-gray-400">31 days without response</span>
+              </div>
+            </td>
+          </tr>
+          <tr class="respond-row" id="respond-r5">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5" style="border-top-color:#C44444;border-bottom-color:#C44444;">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-crimson"></div>
+                    <span class="text-base font-bold text-navy">Urgent: Sewage overflow near Chileka clinic</span>
+                    <span class="badge cat-water ml-1">Water</span>
+                    <span class="badge pill-overdue ml-1">⚑ Overdue</span>
+                  </div>
+                  <button onclick="closeRespond('r5')" class="text-gray-400 hover:text-gray-600 text-base font-medium">✕ Close</button>
+                </div>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-crimson uppercase tracking-wider mb-1.5">⚠ Urgent — 31 Days Without Response</div>
+                  <p class="text-base text-gray-600 leading-relaxed italic">"Raw sewage has been overflowing onto the path near the clinic for over a month. People are getting sick. This is urgent."</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base text-gray-400">📍 Chileka Clinic Pathway</span>
+                    <span class="text-base text-crimson font-medium">Auto-escalation in 14 days</span>
+                    <span class="text-base text-navy font-medium">▲ 11 votes</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Your Public Response</label>
+                    <textarea id="ta-r5" class="w-full border border-red-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="This issue is overdue. Write a response or escalate immediately to avoid automatic escalation…" oninput="countChars('ta-r5','cc-r5')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-crimson">⚠ Respond now to prevent automatic escalation</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r5">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update Status</label>
+                      <select id="sel-r5" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="progress">In Progress</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="resolved">Resolved</option>
+                      </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" class="rounded accent-sage" checked> Notify 11 citizens via SMS
+                      </label>
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" id="esc-r5" class="rounded accent-sage" onchange="toggleEsc('en-r5',this)"> Escalate to Ministry
+                      </label>
+                    </div>
+                    <button onclick="submitResponse('r5')" class="mt-auto text-base bg-crimson text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Submit Response
+                    </button>
+                  </div>
+                </div>
+                <div id="en-r5" class="hidden mt-3 p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                  <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1">Escalate To</label>
+                  <select class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none bg-white">
+                    <option>Blantyre Water Board</option>
+                    <option>Blantyre District Council</option>
+                    <option>Ministry of Water & Sanitation</option>
+                  </select>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- ── ROW 6 — Pending / Security ── -->
+          <tr class="trow issue-row" id="row-r6" data-status="pending" data-cat="security" onclick="toggleExpand('r6')">
+            <td class="px-4 py-3">
+              <div class="text-base font-medium text-navy">Market stall fire safety violations</div>
+              <div class="text-base text-gray-400">#MW-2026-0527</div>
+            </td>
+            <td class="px-4 py-3"><span class="badge cat-security">Security</span></td>
+            <td class="px-4 py-3"><span class="badge pill-pending" id="status-r6">Pending</span></td>
+            <td class="px-4 py-3"><span class="text-base font-semibold text-navy">7</span></td>
+            <td class="px-4 py-3"><span class="text-base text-gray-400">2 days ago</span></td>
+            <td class="px-4 py-3 text-gray-300 text-base" id="arrow-r6">▶</td>
+            <td class="px-4 py-3" onclick="event.stopPropagation()">
+              <button onclick="openRespond('r6')" id="btn-r6" class="text-base bg-navy text-white px-3 py-1.5 rounded-lg font-medium hover:opacity-90 transition-opacity">Respond</button>
+            </td>
+          </tr>
+          <tr class="expand-row" id="expand-r6">
+            <td colspan="7" class="px-4 py-3 border-b border-gray-100">
+              <div class="text-base text-gray-500 mb-2"><span class="font-semibold text-gray-600">Citizen report:</span> "Several stalls in section C have no fire extinguishers and use charcoal next to fabric stores. Urgent inspection needed."</div>
+              <div class="text-base text-gray-400">Reported 2 days ago · ▲ 7 votes</div>
+            </td>
+          </tr>
+          <tr class="respond-row" id="respond-r6">
+            <td colspan="7" class="p-0">
+              <div class="respond-panel px-6 py-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 rounded-full bg-sage"></div>
+                    <span class="text-base font-bold text-navy">Responding to: Market stall fire safety violations</span>
+                    <span class="badge cat-security ml-1">Security</span>
+                    <span class="text-base text-gray-400">#MW-2026-0527 · 7 citizens</span>
+                  </div>
+                  <button onclick="closeRespond('r6')" class="text-gray-400 hover:text-gray-600 text-base font-medium">✕ Close</button>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4">
+                  <div class="text-base font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Citizen's Report</div>
+                  <p class="text-base text-gray-600 leading-relaxed italic">"Several stalls in Chileka market section C have no fire extinguishers and are using charcoal braziers next to fabric stores. This is a serious fire risk and we need the council to inspect and enforce safety rules."</p>
+                  <div class="flex gap-4 mt-2">
+                    <span class="text-base text-gray-400">📍 Chileka Market, Section C</span>
+                    <span class="text-base text-navy font-medium">▲ 7 votes</span>
+                    <span class="text-base text-gray-400">2 days ago</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div class="col-span-2">
+                    <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Your Public Response</label>
+                    <textarea id="ta-r6" class="w-full border border-gray-200 rounded-lg text-base p-3 resize-none text-gray-700 placeholder-gray-300 bg-white" rows="4" maxlength="500" placeholder="Write a public response visible to all 7 affected citizens…" oninput="countChars('ta-r6','cc-r6')"></textarea>
+                    <div class="flex justify-between mt-1">
+                      <span class="text-base text-gray-300">Visible to citizens on the Boma Lathu app</span>
+                      <span class="char-count text-base text-gray-400" id="cc-r6">0 / 500</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    <div>
+                      <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Update Status</label>
+                      <select id="sel-r6" class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none">
+                        <option value="progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" class="rounded accent-sage" checked> Notify 7 citizens via SMS
+                      </label>
+                      <label class="flex items-center gap-2 text-base text-gray-600 cursor-pointer select-none">
+                        <input type="checkbox" id="esc-r6" class="rounded accent-sage" onchange="toggleEsc('en-r6',this)"> Escalate to Ministry
+                      </label>
+                    </div>
+                    <button onclick="submitResponse('r6')" class="mt-auto text-base bg-sage text-white px-4 py-2.5 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Submit Response
+                    </button>
+                  </div>
+                </div>
+                <div id="en-r6" class="hidden mt-3 p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                  <label class="text-base font-semibold text-gray-500 uppercase tracking-wider block mb-1">Escalate To</label>
+                  <select class="w-full text-base border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none bg-white">
+                    <option>Malawi Police Service</option>
+                    <option>Blantyre District Council</option>
+                    <option>Fire & Emergency Services</option>
+                  </select>
+                </div>
+              </div>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+      <div class="px-4 py-3 border-t border-gray-50 flex justify-between items-center">
+        <span class="text-base text-gray-400">Page 1 of 2 — 12 total issues</span>
+        <div class="flex gap-1">
+          <button class="text-base border border-gray-200 px-3 py-1.5 rounded-lg text-gray-400">← Prev</button>
+          <button class="text-base text-white px-3 py-1.5 rounded-lg font-medium" style="background:#0E1B2E">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  let currentStatus = 'all';
+  let openRespondId = null;
+
+  // ── Filter / toggle helpers ────────────────────────────────────
+  function filterStatus(status) {
+    currentStatus = status;
+    document.querySelectorAll('.toggle-btn').forEach((b, i) => {
+      b.classList.toggle('active', ['all','pending','progress','resolved'][i] === status);
+    });
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const cat = document.getElementById('catFilter').value;
+    document.querySelectorAll('.issue-row').forEach(row => {
+      const s = row.dataset.status;
+      const c = row.dataset.cat;
+      const show = (currentStatus === 'all' || s === currentStatus) && (!cat || c === cat);
+      row.style.display = show ? '' : 'none';
+      // keep paired rows in sync
+      const id = row.id.replace('row-', '');
+      const exp = document.getElementById('expand-' + id);
+      const res = document.getElementById('respond-' + id);
+      if (!show) {
+        if (exp) exp.classList.remove('open');
+        if (res) { res.classList.remove('open'); row.classList.remove('responding'); }
+        if (exp) exp.style.display = 'none';
+        if (res) res.style.display = 'none';
+      } else {
+        if (exp) exp.style.display = '';
+        if (res) res.style.display = '';
+      }
+    });
+  }
+
+  function toggleExpand(id) {
+    // Don't expand if respond panel is open for this row
+    if (openRespondId === id) return;
+    const row = document.getElementById('expand-' + id);
+    const arrow = document.getElementById('arrow-' + id);
+    const isOpen = row.classList.contains('open');
+    document.querySelectorAll('.expand-row').forEach(r => r.classList.remove('open'));
+    document.querySelectorAll('[id^="arrow-"]').forEach(a => a.textContent = '▶');
+    if (!isOpen) {
+      row.classList.add('open');
+      if (arrow) arrow.textContent = '▼';
+    }
+  }
+
+  // ── Respond panel ──────────────────────────────────────────────
+  function openRespond(id) {
+    // Close any currently open respond panel
+    if (openRespondId && openRespondId !== id) {
+      closeRespond(openRespondId);
+    }
+    // Close detail expand for this row if open
+    const expRow = document.getElementById('expand-' + id);
+    if (expRow) expRow.classList.remove('open');
+    const arrow = document.getElementById('arrow-' + id);
+    if (arrow) arrow.textContent = '▶';
+
+    const respondRow = document.getElementById('respond-' + id);
+    const issueRow   = document.getElementById('row-' + id);
+    if (!respondRow) return;
+
+    respondRow.classList.add('open');
+    issueRow.classList.add('responding');
+    openRespondId = id;
+
+    // Scroll respond panel into view smoothly
+    setTimeout(() => {
+      respondRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+  }
+
+  function closeRespond(id) {
+    const respondRow = document.getElementById('respond-' + id);
+    const issueRow   = document.getElementById('row-' + id);
+    if (respondRow) respondRow.classList.remove('open');
+    if (issueRow)   issueRow.classList.remove('responding');
+    if (openRespondId === id) openRespondId = null;
+  }
+
+  // ── Respond form helpers ───────────────────────────────────────
+  function countChars(taId, ccId) {
+    const ta = document.getElementById(taId);
+    const cc = document.getElementById(ccId);
+    const len = ta.value.length;
+    cc.textContent = len + ' / 500';
+    cc.style.color = len > 450 ? '#C44444' : '#9CA3AF';
+  }
+
+  function toggleEsc(noteId, checkbox) {
+    document.getElementById(noteId).classList.toggle('hidden', !checkbox.checked);
+  }
+
+  // Status badge class map
+  const statusClasses = {
+    progress:  'pill-progress',
+    resolved:  'pill-resolved',
+    escalated: 'pill-escalated',
+    pending:   'pill-pending',
+    overdue:   'pill-overdue',
+  };
+  const statusLabels = {
+    progress:  'In Progress',
+    resolved:  'Resolved',
+    escalated: 'Escalated',
+    pending:   'Pending',
+    overdue:   '⚑ Overdue',
+  };
+
+  function submitResponse(id) {
+    const ta  = document.getElementById('ta-' + id);
+    const sel = document.getElementById('sel-' + id);
+    if (!ta) return;
+
+    if (!ta.value.trim()) {
+      ta.style.borderColor = '#C44444';
+      ta.placeholder = 'Please write a response before submitting…';
+      setTimeout(() => { ta.style.borderColor = ''; }, 2000);
+      return;
+    }
+
+    // Update status badge in the table row
+    if (sel) {
+      const newStatus = sel.value;
+      const badge = document.getElementById('status-' + id);
+      if (badge) {
+        badge.className = 'badge ' + (statusClasses[newStatus] || 'pill-pending');
+        badge.textContent = statusLabels[newStatus] || newStatus;
+      }
+      // Update row dataset for filter compatibility
+      const row = document.getElementById('row-' + id);
+      if (row) row.dataset.status = newStatus;
+    }
+
+    // Close the respond panel with a brief flash
+    const panel = document.querySelector('#respond-' + id + ' .respond-panel');
+    if (panel) {
+      panel.style.transition = 'opacity .3s';
+      panel.style.opacity = '0.4';
+    }
+    setTimeout(() => {
+      closeRespond(id);
+      if (panel) { panel.style.opacity = ''; panel.style.transition = ''; }
+    }, 400);
+
+    showToast('✓ Response submitted for #MW-2026-0' + (391 + parseInt(id.replace('r',''))));
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (msg) t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+</script>
+</body>
+</html>
